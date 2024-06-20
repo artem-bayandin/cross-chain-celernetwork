@@ -1,7 +1,7 @@
 {
-  "name": "cross-chain-celernetwork-sample",
+  "name": "temp",
   "version": "1.0.0",
-  "main": "",
+  "main": "index.js",
   "license": "MIT",
   "dependencies": {
     "sgn-v2-contracts": "^0.2.0"
@@ -35,6 +35,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/artem-bayandin/cross-chain-celernetwork.git"
+    "url": "git+https://github.com/artem-bayandin/temp-celercc.git"
   }
 }

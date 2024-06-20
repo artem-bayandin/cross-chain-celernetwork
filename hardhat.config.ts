@@ -17,6 +17,26 @@ const { pk } = require("./.secrets.json")
 
 const _1gwei = 1000000000
 
+const hardhatNetworkDefault = {
+  chainId: 127127,
+  // url: 'http://127.0.0.1:8545',
+  accounts: {
+    mnemonic: 'junk test junk test junk test junk test junk test junk test'
+  },
+  blockGasLimit: 30000000,
+  gas: 3000000,
+  gasPrice: 5 * _1gwei,
+  allowUnlimitedContractSize: false,
+  throwOnTransactionFailures: true,
+  throwOnCallFailures: true,
+  /* loggingEnabled: true */
+}
+let hardhatNetwork2 = {
+  ...hardhatNetworkDefault
+  , chainId: hardhatNetworkDefault.chainId + 1
+  , url: 'http://127.0.0.1:8546'
+}
+
 const config: HardhatUserConfig = {
   paths: {
     sources: './contracts',
@@ -45,24 +65,13 @@ const config: HardhatUserConfig = {
   },
   defaultNetwork: 'hardhat',
   networks: {
-    hardhat: {
-      chainId: 127127,
-      accounts: {
-        mnemonic: 'junk test junk test junk test junk test junk test junk test'
-      },
-      blockGasLimit: 30000000,
-      gas: 3000000,
-      gasPrice: 5 * _1gwei,
-      allowUnlimitedContractSize: false,
-      throwOnTransactionFailures: true,
-      throwOnCallFailures: true,
-      /* loggingEnabled: true */
-    },
+    hardhat: hardhatNetworkDefault,
+    // hardhat2: hardhatNetwork2,
     bsctest: {
       url: "https://data-seed-prebsc-1-s1.binance.org:8545",
       chainId: 97,
       gas: 3000000,
-      gasPrice: 10 * _1gwei,
+      gasPrice: 10.1 * _1gwei,
       accounts: [pk]
     },
     goerli: {
@@ -76,7 +85,7 @@ const config: HardhatUserConfig = {
       url: 'https://matic-mumbai.chainstacklabs.com',
       chainId: 80001,
       gas: 3000000,
-      gasPrice: 2 * _1gwei,
+      gasPrice: 3 * _1gwei,
       accounts: [pk]
     }
   }

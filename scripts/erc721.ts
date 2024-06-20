@@ -22,13 +22,17 @@ let feeData: FeeData
 
 async function main() {
     signer = (await ethers.getSigners())[0]
-    console.log(`signer`, signer.address)
+    console.log(`running as ${signer.address == secrets.adminAddress ? 'ADMIN' : 'USER'}`, signer.address)
 
     feeData = await ethers.provider.getFeeData()
     console.log(`feedata`, feeData)
 
-    await crossChain(mumbaiChainData, goerliChainData, 9 + mumbaiChainData.offset)
-    await crossChain(mumbaiChainData, bscChainData, 10 + mumbaiChainData.offset)
+    // await deployBridge()
+    // await setupBridge()
+
+    // await crossChain(mumbaiChainData, goerliChainData, 9 + mumbaiChainData.offset)
+    // await crossChain(mumbaiChainData, bscChainData, 5 + mumbaiChainData.offset)
+    await crossChainWithBridgeValidation(mumbaiChainData, bscChainData, mumbaiChainData.bridgeAddressRetry, 5 + mumbaiChainData.offset)
     // await logTokenOwners()
     // await logBalances()
     // await transferSingleChain()
@@ -46,7 +50,19 @@ interface IData {
     bridgeAddress: string
     offset: number
     minted: number
+    bridgeAddressRetry: string
+    bridgeAddressThrow: string
 }
+
+/*
+  EX prev
+  # allow and execute messages originated from <app-contract-address> on chain 1
+  { chain_id = 5, address = "0xe23b682e6711d4CDeBEcAE86F202404631642969" },
+  # allow and execute messages originated from <app-contract-address> on chain 97
+  { chain_id = 97, address = "0x6446598B185ae9539b935fEe292cCdb79737A6C1" },
+  # allow and execute messages originated from <app-contract-address> on chain 80001
+  { chain_id = 80001, address = "0x9Fa4D857cE814d476D7a300d05d587E676ef251c" }
+*/
 
 const goerliChainData: IData = {
     name: 'Goerli'
@@ -56,19 +72,21 @@ const goerliChainData: IData = {
     , bridgeAddress: '0x130b890db8796667c92c9df0afa3eaeee60f5606' // '0x358234B325EF9eA8115291A8b81b7d33A2Fa762D'
     , offset: 100000
     , minted: 10
-    // 100001
-    // 100002
-    // 100003 on BSC
-    // 100004 on Mumbai
-    // 100005 on BSC
-    // 100006 (user)
-    // 100007 (user)
-    // 100008 (user)
-    // 100009 (user)
-    // 100010 (user)
-    // other
-    // 4 (user)
-    // 200004 from BSC (user)
+    // 100001 admin
+    // 100002 admin
+    // 100003 ----
+    // 100004 ----
+    // 100005 ----
+    // 100006 ----
+    // 100007 ----
+    // 100008 user
+    // 100009 user
+    // 100010 user
+    //
+    // 4, 9 from Mumbai (user)
+    // 200004, 20007 from BSC (user)
+    , bridgeAddressRetry: ''
+    , bridgeAddressThrow: ''
 }
 
 const mumbaiChainData: IData = {
@@ -79,19 +97,21 @@ const mumbaiChainData: IData = {
     , bridgeAddress: '0x57F291B73150157c94a99172355722e2c0268e26' // '0x841ce48F9446C8E281D3F1444cB859b4A6D0738C'
     , offset: 0
     , minted: 10
-    // 1
-    // 2
-    // 3 on BSC
-    // 4 on Goerli
-    // 5 (user)
-    // 6
-    // 7
-    // 8
-    // 9
-    // 10
-    // other
-    // 200003 from BSC (user)
-    // 100004 from Goerli (user)
+    // 1 admin
+    // 2 admin
+    // 3 ----
+    // 4 ----
+    // 5 user send to BSC into RETRY bridge
+    // 6 user
+    // 7 user
+    // 8 user
+    // 9 ----
+    // 10 ---
+    //
+    // 200003, 20008 from BSC (user)
+    // 100004, 10007 from Goerli (user)
+    , bridgeAddressRetry: '0x57cD9c81db814601a23CD8f82233A0F0BD515D4A'
+    , bridgeAddressThrow: '0xcD1fe490993b05e52E7F7FEC15cbbc6a754964B1'
 }
 
 const bscChainData: IData = {
@@ -102,20 +122,21 @@ const bscChainData: IData = {
     , bridgeAddress: '0x22D8DC613d0866393714ad038817158d79507039' // '0xf89354F314faF344Abd754924438bA798E306DF2'
     , offset: 200000
     , minted: 10
-    // 200001
-    // 200002
-    // 200003 on Mumbai
-    // 200004 on Goerli
-    // 200005 (user)
-    // 200006
-    // 200007
-    // 200008
-    // 200009
-    // 200010
-    // other
-    // 3 from Mumbai (user)
-    // 100003 from Goerli (user)
-    // 100005 from Goerli (user)
+    // 200001 admin
+    // 200002 admin
+    // 200003 ----
+    // 200004 ----
+    // 200005 user
+    // 200006 user
+    // 200007 ----
+    // 200008 ----
+    // 200009 user
+    // 200010 user
+    //
+    // 3, 10 from Mumbai (user)
+    // 100003, 10005, 10006 from Goerli (user)
+    , bridgeAddressRetry: '0x94b1005CBA2C8bB20C553f57B19F8e74B6aefd1B'
+    , bridgeAddressThrow: '0x3D6Ffeb4795AA6622B5A56a40aF7758d38a54EeA'
 }
 
 async function getChainId(): Promise<number> {
@@ -136,6 +157,10 @@ async function getIDataByChainId(): Promise<IData> {
         default:
             throw new Error(`Invalid chainId: ${chainId}`)
     }
+}
+
+function createAdminWallet() {
+  return new ethers.Wallet(secrets.admin, ethers.provider)
 }
 
 async function getNftContract(address: string): Promise<ERC721CelerCrossChain> {
@@ -207,26 +232,70 @@ async function transferSingleChain() {
 }
 
 async function crossChain(srcChainData: IData, destChainData: IData, tokenId: number) {
-    const contract = await getNftContract(srcChainData.nftAddress)
+    await crossChainWithBridgeValidation(srcChainData, destChainData, srcChainData.bridgeAddress, tokenId)
+}
 
-    // const tokenId = 3 + srcChainData.offset
+async function crossChainWithBridgeValidation(srcChainData: IData, destChainData: IData, srcBridgeAddress: string, tokenId: number) {
+    const contract = await getNftContract(srcChainData.nftAddress)
+    console.log(`${srcChainData.nftAddress === contract.address} nft: ${contract.address}`)
+
+    const tokenOwner = await contract.ownerOf(tokenId)
+    console.log(`${tokenOwner === signer.address} owner of ${tokenId} is ${tokenOwner}`)
+
+    // approve to be burnt by Bridge
 
     const fee = await contract.totalFee(destChainData.chainId, tokenId)
     console.log(`fee: ${fee.toString()}`)
 
-    const bridge = await contract.nftBridge()
-    console.log(`bridge: ${bridge}`)
+    let bridgeAddress = await contract.nftBridge()
+    console.log(`${bridgeAddress === srcBridgeAddress} src bridge (1): ${bridgeAddress}`)
+    if (bridgeAddress !== srcBridgeAddress) {
+      const setBridgeTx = await contract.connect(createAdminWallet()).setNFTBridge(srcBridgeAddress)
+      await setBridgeTx.wait()
+      bridgeAddress = srcBridgeAddress
+      console.log(`new bridge was set: ${bridgeAddress}`)
+    }
 
-    const estimated = await contract.estimateGas.crossChain(destChainData.chainId, tokenId, signer.address, { value: fee, gasLimit: 500000 })
-    console.log(`estimated: ${estimated.toString()}`)
+    // validate
+    // require(msg.sender == ownerOf(_id), "not token owner");
+    console.log(`${tokenOwner == signer.address} check owner`)
+    // burn() no
+// _checkAddr(_nft, _destChid);
+    const bridge = await getBridgeContract(bridgeAddress)
+    // _destBridge = destBridge_[_destChid];
+    // require(_destBridge != address(0), "Dest NFT Bridge not found.");
+    const validateDestBridge = await bridge.destBridge(destChainData.chainId)
+    console.log(`${validateDestBridge != ethers.constants.AddressZero} destBridge; ${validateDestBridge}`)
+    // _destNft = destNFTAddr_[_nft][_destChid];
+    // require(_destNft != address(0), "Dest NFT not found.");
+    const validateDestNft = await bridge.destNFTAddr(srcChainData.nftAddress, destChainData.chainId)
+    console.log(`${validateDestNft != ethers.constants.AddressZero} destNFT; ${validateDestNft}`)
+    // message bus
+    // uint256 fee = IMessageBus(messageBus).calcFee(_message);
+    // require(msg.value >= fee + destTxFee_[_destChid], "Insufficient fee.");
+    const validateMsgBus = await bridge.messageBus()
+    console.log(`${validateMsgBus == srcChainData.messageBus} validateMsgBus; ${validateMsgBus} : ${srcChainData.messageBus}`)
 
-    const balance = await signer.getBalance()
-    const balanceNeeded = feeData.gasPrice?.mul(estimated).add(fee)
-    console.log(
-`balance: ${balance.toString()}
-needed : ${balanceNeeded?.toString()}`)
+    // const estimated = await contract.estimateGas
+    //   .crossChain(
+    //     destChainData.chainId, tokenId, ethers.constants.AddressZero
+    //     // , { value: fee/*, gasLimit: 500000*/ }
+    //   )
+    // console.log(`estimated: ${estimated.toString()}`)
 
-    const crossChainTx = await contract.crossChain(destChainData.chainId, tokenId, signer.address, { value: fee, gasLimit: 500000 })
+//     const balance = await signer.getBalance()
+//     const balanceNeeded = feeData.gasPrice?.mul(estimated).add(fee)
+//     console.log(
+// `balance: ${balance.toString()}
+// needed : ${balanceNeeded?.toString()}`)
+
+    const crossChainTx = await contract.crossChain(
+      destChainData.chainId
+      , tokenId
+      , signer.address
+      // , { value: fee, gasLimit: 500000 }
+    )
+
     console.log(`crossChain ${tokenId} from ${srcChainData.name} to ${destChainData.name} tx hash: ${crossChainTx.hash}`)
     const receipt = await crossChainTx.wait()
     console.log(`completed`)
@@ -239,9 +308,9 @@ needed : ${balanceNeeded?.toString()}`)
 
 async function setupBridge() {
     const currentChainData = await getIDataByChainId()
-    const bridge = await getBridgeContract(currentChainData.bridgeAddress)
+    const bridge = await getBridgeContract(currentChainData.bridgeAddressThrow) // .bridgeAddress
 
-    const destChains = [ goerliChainData, mumbaiChainData, bscChainData ]
+    const destChains = [ /*goerliChainData,*/ mumbaiChainData, bscChainData ]
     .filter((item: IData) => item.chainId !== currentChainData.chainId)
 
     const tokenId = 3 + currentChainData.offset
@@ -250,7 +319,7 @@ async function setupBridge() {
 
     const destChaindIds = destChains.map((item: IData) => item.chainId)
     const destNfts = destChains.map((item: IData) => item.nftAddress)
-    const destBridges = destChains.map((item: IData) => item.bridgeAddress)
+    const destBridges = destChains.map((item: IData) => item.bridgeAddressThrow) // .bridgeAddress
 
     const setDestBridgesTx = await bridge.setDestBridges(destChaindIds, destBridges)
     console.log(`setDestBridges on ${currentChainData.name} tx hash: ${setDestBridgesTx.hash}`)

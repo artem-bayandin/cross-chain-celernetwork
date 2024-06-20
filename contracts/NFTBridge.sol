@@ -44,6 +44,30 @@ contract NFTBridge is INFTBridge, MessageReceiverApp, Pausable, Initializable {
     event SetTxFee(uint64 chid, uint256 fee);
     event SetDestBridge(uint64 destChid, address destNftBridge);
 
+    // test events
+    event ExecuteMessageWithTransfer(
+        address _sender,
+        address _token,
+        uint256 _amount,
+        uint64 _srcChainId,
+        bytes _message,
+        address _executor
+    );
+    event ExecuteMessageWithTransferFallback(
+        address _sender,
+        address _token,
+        uint256 _amount,
+        uint64 _srcChainId,
+        bytes _message,
+        address _executor
+    );
+    event ExecuteMessageWithTransferRefund(
+        address _token,
+        uint256 _amount,
+        bytes _message,
+        address _executor
+    );
+
     constructor(address _msgBus) {
         messageBus = _msgBus;
     }
@@ -126,10 +150,47 @@ contract NFTBridge is INFTBridge, MessageReceiverApp, Pausable, Initializable {
         // but we allow retry later in case it's a temporary config error
         // risk is invalid sender will be retried but this can be easily filtered
         // in executor or require manual trigger for retry
-        if (paused() || _sender != destBridge_[_srcChid]) {
-            return ExecutionStatus.Retry;
-        }
-        return xferOrMint(_message, _srcChid);
+        
+        // if (paused() || _sender != destBridge_[_srcChid]) {
+        //     return ExecutionStatus.Retry;
+        // }
+        // return xferOrMint(_message, _srcChid);
+
+        revert ("Manually reverted executeMessage");
+    }
+
+    function executeMessageWithTransfer(
+        address _sender,
+        address _token,
+        uint256 _amount,
+        uint64 _srcChainId,
+        bytes calldata _message,
+        address _executor
+    ) external payable virtual override onlyMessageBus returns (ExecutionStatus) {
+        emit ExecuteMessageWithTransfer(_sender, _token, _amount, _srcChainId, _message, _executor);
+        revert ("Manually reverted executeMessageWithTransfer");
+    }
+    
+    function executeMessageWithTransferFallback(
+        address _sender,
+        address _token,
+        uint256 _amount,
+        uint64 _srcChainId,
+        bytes calldata _message,
+        address _executor
+    ) external payable virtual override onlyMessageBus returns (ExecutionStatus) {
+        emit ExecuteMessageWithTransferFallback(_sender, _token, _amount, _srcChainId, _message, _executor);
+        return ExecutionStatus.Success;
+    }
+    
+    function executeMessageWithTransferRefund(
+        address _token,
+        uint256 _amount,
+        bytes calldata _message,
+        address _executor
+    ) external payable virtual override onlyMessageBus returns (ExecutionStatus) {
+        emit ExecuteMessageWithTransferRefund(_token, _amount, _message, _executor);
+        return ExecutionStatus.Success;
     }
 
     // READ
